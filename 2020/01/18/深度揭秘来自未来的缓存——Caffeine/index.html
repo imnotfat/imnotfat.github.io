@@ -155,7 +155,8 @@
 <li><em>Least recently used (LRU)</em> 最近最少被使用算法，其核心思想是【如果数据最近被访问过，那么将来被访问的概率也更大】，忽略了数据的访问次数，最常见的实现是维护一个链表，新数据插入到链表尾部，命中缓存的数据重新移至队尾，队列满后移出队首元素。LRU算法在有热点数据的情况下效率很好，但是如果面临突然流量或者周期性的数据访问是命中率会急剧下降。</li>
 <li><em>Least frequently used (LFU)</em> 最近最少频率使用，他的核心思想是【如果数据过去被多次访问，那么将来被访问的概率也更大】，LFU的实现需要为每个缓存数据维护一个引用计数，最后基于访问数量进行数据淘汰操作，因此实现较为复杂。LFU算法的效率通常高于LRU，能较好的介君突发流量或周期性访问问题，但是由于LFU需要一定时间累积自己的访问频率，因此无法应对数据访问方式的改变。</li>
 <li>更多的缓存淘汰算法有兴趣的同学可点击<a href="https://en.wikipedia.org/wiki/Cache_replacement_policies#Segmented_LRU_(SLRU)" target="_blank" rel="noopener">传送门</a>。
-Caffeine的缓存淘汰是通过一种叫做W-TinyLFU的数据结构实现的，这是一种对LRU和LFU进行了组合优化的算法，下图给出了W-TinyLFU相对其他几种算法的表现，可以看出W-TinyLFU在数据查询、搜索、分析等场景均有优异的表现，更详细的性能测试可以点击<a href="https://github.com/ben-manes/caffeine/wiki/Benchmarks" target="_blank" rel="noopener">传送门</a>。</li>
+Caffeine的缓存淘汰是通过一种叫做W-TinyLFU的数据结构实现的，这是一种对LRU和LFU进行了组合优化的算法，下图给出了W-TinyLFU相对其他几种算法的表现，可以看出W-TinyLFU在数据查询、搜索、分析等场景均有优异的表现，更详细的性能测试可以点击<a href="https://github.com/ben-manes/caffeine/wiki/Benchmarks" target="_blank" rel="noopener">传送门</a>。
+<img src="https://i.loli.net/2020/01/18/frEtxY4cLGkFsiA.png" srcset="/img/loading.gif" alt="image _1_.png"><img src="https://i.loli.net/2020/01/18/B8zVXarIJmvAfbZ.png" srcset="/img/loading.gif" alt="image _2_.png"></li>
 </ul>
 
             <hr>
