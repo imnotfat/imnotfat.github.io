@@ -106,7 +106,7 @@
                   
                   &nbsp;<i class="far fa-chart-bar"></i>
                   <span class="post-count">
-                    3.9k 字
+                    4.9k 字
                   </span>&nbsp;
                 
 
@@ -114,7 +114,7 @@
                   
                   &nbsp;<i class="far fa-clock"></i>
                   <span class="post-count">
-                      13 分钟
+                      17 分钟
                   </span>&nbsp;
                 
 
@@ -188,8 +188,11 @@ Caffeine的缓存淘汰是通过一种叫做W-TinyLFU的数据结构实现的，
 }</code></pre>
 <h2 id="过期策略（Time-Based）"><a href="#过期策略（Time-Based）" class="headerlink" title="过期策略（Time-Based）"></a>过期策略（Time-Based）</h2><p>缓存数据过期清理的必要性和重要性不仅仅体现在应用场景的要求上，对于缓存本身，及时清理掉过期数据可以节省空间，降低缓存的维护成本，提高缓存性能，缓存过期清理的方式可以分为以下两种（是我按照自己的理解分的，没有资料依据，有不当之处望大家指正）：</p>
 <ul>
-<li>_访问清理_，即每次访问某个具体的缓存数据时判断其是否过期然后执行相应的操作。这种策略的优点就是实现简单，缺点是缓存的过期依赖于缓存的访问，会造成过期数据污染缓存区现象的发生，如果一个数据过期后没有被再次访问，那么他可能会长期存在于缓存中，直到淘汰策略将其移除。</li>
-<li>_全局清理_，即在某些特定的时期全局性的扫描缓存区，清理掉过期数据。这种方式的优点是可以及时清理掉一些过期的数据，不必依赖数据的访问。缺点是实现成本高，需要使用额外的数据结构去维护一个过期队列，实现复杂，除此之外全局清理的发生时间也是一个棘手的问题。<h3 id="清理策略"><a href="#清理策略" class="headerlink" title="清理策略"></a>清理策略</h3>Caffeine中的对于访问清理和全局清理都有支持，对于访问清理的实现方式如下图所示，因为Caffeine缓存区的实现是一个LRU队列，本身就维护了数据访问的时间顺序，因此不必使用额外的数据结构进行存储，每次只用peek出缓存队列的首部元素对其进行过期判断即可。<pre><code class="java">void expireAfterAccessEntries(AccessOrderDeque&lt;Node&lt;K, V&gt;&gt; accessOrderDeque, long now) {
+<li><p>_访问清理_，即每次访问某个具体的缓存数据时判断其是否过期然后执行相应的操作。这种策略的优点就是实现简单，缺点是缓存的过期依赖于缓存的访问，会造成过期数据污染缓存区现象的发生，如果一个数据过期后没有被再次访问，那么他可能会长期存在于缓存中，直到淘汰策略将其移除。</p>
+</li>
+<li><p>_全局清理_，即在某些特定的时期全局性的扫描缓存区，清理掉过期数据。这种方式的优点是可以及时清理掉一些过期的数据，不必依赖数据的访问。缺点是实现成本高，需要使用额外的数据结构去维护一个过期队列，实现复杂，除此之外全局清理的发生时间也是一个棘手的问题。</p>
+<h3 id="清理策略"><a href="#清理策略" class="headerlink" title="清理策略"></a>清理策略</h3><p>Caffeine中的对于访问清理和全局清理都有支持，对于访问清理的实现方式如下图所示，因为Caffeine缓存区的实现是一个LRU队列，本身就维护了数据访问的时间顺序，因此不必使用额外的数据结构进行存储，每次只用peek出缓存队列的首部元素对其进行过期判断即可。</p>
+<pre><code class="java">void expireAfterAccessEntries(AccessOrderDeque&lt;Node&lt;K, V&gt;&gt; accessOrderDeque, long now) {
   long duration = expiresAfterAccessNanos();
   for (;;) {
     Node&lt;K, V&gt; node = accessOrderDeque.peekFirst();
@@ -199,7 +202,11 @@ Caffeine的缓存淘汰是通过一种叫做W-TinyLFU的数据结构实现的，
     evictEntry(node, RemovalCause.EXPIRED, now);
   }
 }</code></pre>
-对于全局清理而言主要有两个要解决的问题点，即如何选择清理时间和如何快速找到过期数据并移除。我们首先来看第一个问题，通常来讲有两种方式，一是依赖缓存的淘汰策略，缓存区达到容量限制后发生缓存淘汰时触发一次缓存过期清理，二是开启一个清理线程定期的执行过期清理工作。Caffeine中选择的第二种方式，不同的是这里的实现并不是通过一个轮询线程定期执行，而是由缓存的读写触发的，具体的触发方式和触发规则将在下一节【并发控制】里详细讲解。解决了如何选择清理时间的问题我们再来看如何能快速找到过期数据，通常的做法是维护一个基于过期时间的优先队列，这样做的复杂度是O(lgn)，Caffeine中采用的是Kafka中的时间轮<a href="http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf" target="_blank" rel="noopener">hierarchical timing wheels</a>方法，他的插入删除时间复杂度都为O(1)，相信做过定时任务调度的同学对这个数据结构一定不陌生，这里只做一点简单的介绍，想要深入了解的同学可以点击<a href="https://www.confluent.io/blog/apache-kafka-purgatory-hierarchical-timing-wheels/" target="_blank" rel="noopener">传送门</a>。<h3 id="时间轮（Timing-Wheels）"><a href="#时间轮（Timing-Wheels）" class="headerlink" title="时间轮（Timing Wheels）"></a>时间轮（Timing Wheels）</h3><img src="https://i.loli.net/2020/01/18/9aLn6PFjhK8cB3q.png" srcset="/img/loading.gif" alt="185214690.png"><br>时间轮是一个由时间插槽组成的环状数组，插槽由一组同样时间范围内的定时任务组成。每一个插槽代表一个时间间隔(u)，时间轮由n个插槽组成，因此一个时间轮所能承载的调度时间是u*n。时间轮中时间指针(ticks)用于标记时间，每次转动一个插槽的间隔，ticks指向的插槽代表当前插槽内的所有任务过期，清空当前插槽，插入任务时，基于当前时间算出ticks所在的插槽，再根据任务的过期时间插入相应的插槽即可，可以看出时间轮对于任务的插入和删除(过期)操作时间复杂度都是O(1)。单个时间轮所能代表的时间是有限的，当一个任务的过期时间超过了时间轮所能表示的调度范围时，单个时间轮就无法胜任了，当然我们可以选择像HashMap一样做扩容，重新划分时间间隔或增加插槽数，显然成本太高，不能接受，因此引进了层级时间轮的概念，更通俗一点就是多来几个轮子，每个时间轮代表的一种时间间隔，如果上层时间轮的精度太粗不能满足要求，则交给下一级的时间轮处理，直至找到满足要求的时间间隔要求的时间轮，此时任务插入的时间成本变成了O(m)，其中m等于时间轮的个数，时间轮的个数不可能很大，这是可以接受的。插槽内定时任务的存储是用一个双向链表实现的，这样设计的好处是如果我们持有列表中一个节点的引用时可以以O(1)的时间复杂度对该节点做删除或插入操作。<h2 id="并发控制（Concurrency-Control）"><a href="#并发控制（Concurrency-Control）" class="headerlink" title="并发控制（Concurrency-Control）"></a>并发控制（Concurrency-Control）</h2>缓存的并发控制是一个比较头疼的问题，因为缓存的淘汰策略、过期策略等等都会涉及到了对同一块缓存区内容的修改，最简单省事的办法无非就是给缓存区加锁，分段锁是一种比较通用的解决方案，ConcurrentyHashMap的实现(Java8之前)就是基于分段锁，然而由于缓存中锁的竞争主要发生在一些热点数据上，因此分段锁带来的收益也是有限的。Caffeine中采用了缓冲队列回放机制来减轻并发带来的锁竞争问题，同时对于缓存而言读操作是远远大于写操作的，因此Caffeine中对于读写的缓冲队列也采用了不同的实现思路和方式，下面详细讨论。<h3 id="缓冲队列——读"><a href="#缓冲队列——读" class="headerlink" title="缓冲队列——读"></a>缓冲队列——读</h3>Caffeine中缓存每次的读操作都会先被写入缓冲队列，其底层的数据结构是一个<a href="https://github.com/ben-manes/caffeine/issues/161" target="_blank" rel="noopener">striped ring buffer</a>，这里的striped是指一种通过哈希获取锁的算法，对于同一个key（Java中可能对象地址不同）哈希后获得的将是同一个锁对象，Caffeine基于striped hash后的key分配相应的ring buffer，值得注意的是这里的key并不是缓存数据的key，而是线程本身，这样设计的好处是可以对热点数据访问引起的激增流量起到削峰作用。写入缓存成功后会基于一定的条件判断是否需要触发一个异步的缓存区调度任务，代码如下。可以看到当ring buffer满了之后并且调度状态满足一定的条件才会触发，如果当前ring buffer满之后，后续写入该队列的读操作会被直接被丢弃，这种信息的缺失并不会产生很大的影响，因为TinyLFU可以记录哪些是热点数据，这里状态机之间的流转如图所示，具体的状态机转移过程情况较多比较复杂，有兴趣的同学可以去看源码。<pre><code class="java">void afterRead(Node&lt;K, V&gt; node, long now, boolean recordHit) {
+<p>对于全局清理而言主要有两个要解决的问题点，即如何选择清理时间和如何快速找到过期数据并移除。我们首先来看第一个问题，通常来讲有两种方式，一是依赖缓存的淘汰策略，缓存区达到容量限制后发生缓存淘汰时触发一次缓存过期清理，二是开启一个清理线程定期的执行过期清理工作。Caffeine中选择的第二种方式，不同的是这里的实现并不是通过一个轮询线程定期执行，而是由缓存的读写触发的，具体的触发方式和触发规则将在下一节【并发控制】里详细讲解。解决了如何选择清理时间的问题我们再来看如何能快速找到过期数据，通常的做法是维护一个基于过期时间的优先队列，这样做的复杂度是O(lgn)，Caffeine中采用的是Kafka中的时间轮<a href="http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf" target="_blank" rel="noopener">hierarchical timing wheels</a>方法，他的插入删除时间复杂度都为O(1)，相信做过定时任务调度的同学对这个数据结构一定不陌生，这里只做一点简单的介绍，想要深入了解的同学可以点击<a href="https://www.confluent.io/blog/apache-kafka-purgatory-hierarchical-timing-wheels/" target="_blank" rel="noopener">传送门</a>。</p>
+<h3 id="时间轮（Timing-Wheels）"><a href="#时间轮（Timing-Wheels）" class="headerlink" title="时间轮（Timing Wheels）"></a>时间轮（Timing Wheels）</h3><p><img src="https://i.loli.net/2020/01/18/9aLn6PFjhK8cB3q.png" srcset="/img/loading.gif" alt="185214690.png"><br>时间轮是一个由时间插槽组成的环状数组，插槽由一组同样时间范围内的定时任务组成。每一个插槽代表一个时间间隔(u)，时间轮由n个插槽组成，因此一个时间轮所能承载的调度时间是u*n。时间轮中时间指针(ticks)用于标记时间，每次转动一个插槽的间隔，ticks指向的插槽代表当前插槽内的所有任务过期，清空当前插槽，插入任务时，基于当前时间算出ticks所在的插槽，再根据任务的过期时间插入相应的插槽即可，可以看出时间轮对于任务的插入和删除(过期)操作时间复杂度都是O(1)。单个时间轮所能代表的时间是有限的，当一个任务的过期时间超过了时间轮所能表示的调度范围时，单个时间轮就无法胜任了，当然我们可以选择像HashMap一样做扩容，重新划分时间间隔或增加插槽数，显然成本太高，不能接受，因此引进了层级时间轮的概念，更通俗一点就是多来几个轮子，每个时间轮代表的一种时间间隔，如果上层时间轮的精度太粗不能满足要求，则交给下一级的时间轮处理，直至找到满足要求的时间间隔要求的时间轮，此时任务插入的时间成本变成了O(m)，其中m等于时间轮的个数，时间轮的个数不可能很大，这是可以接受的。插槽内定时任务的存储是用一个双向链表实现的，这样设计的好处是如果我们持有列表中一个节点的引用时可以以O(1)的时间复杂度对该节点做删除或插入操作。</p>
+<h2 id="并发控制（Concurrency-Control）"><a href="#并发控制（Concurrency-Control）" class="headerlink" title="并发控制（Concurrency-Control）"></a>并发控制（Concurrency-Control）</h2><p>缓存的并发控制是一个比较头疼的问题，因为缓存的淘汰策略、过期策略等等都会涉及到了对同一块缓存区内容的修改，最简单省事的办法无非就是给缓存区加锁，分段锁是一种比较通用的解决方案，ConcurrentyHashMap的实现(Java8之前)就是基于分段锁，然而由于缓存中锁的竞争主要发生在一些热点数据上，因此分段锁带来的收益也是有限的。Caffeine中采用了缓冲队列回放机制来减轻并发带来的锁竞争问题，同时对于缓存而言读操作是远远大于写操作的，因此Caffeine中对于读写的缓冲队列也采用了不同的实现思路和方式，下面详细讨论。</p>
+<h3 id="缓冲队列——读"><a href="#缓冲队列——读" class="headerlink" title="缓冲队列——读"></a>缓冲队列——读</h3><p>Caffeine中缓存每次的读操作都会先被写入缓冲队列，其底层的数据结构是一个<a href="https://github.com/ben-manes/caffeine/issues/161" target="_blank" rel="noopener">striped ring buffer</a>，这里的striped是指一种通过哈希获取锁的算法，对于同一个key（Java中可能对象地址不同）哈希后获得的将是同一个锁对象，Caffeine基于striped hash后的key分配相应的ring buffer，值得注意的是这里的key并不是缓存数据的key，而是线程本身，这样设计的好处是可以对热点数据访问引起的激增流量起到削峰作用。写入缓存成功后会基于一定的条件判断是否需要触发一个异步的缓存区调度任务，代码如下。可以看到当ring buffer满了之后并且调度状态满足一定的条件才会触发，如果当前ring buffer满之后，后续写入该队列的读操作会被直接被丢弃，这种信息的缺失并不会产生很大的影响，因为TinyLFU可以记录哪些是热点数据，这里状态机之间的流转如图所示，具体的状态机转移过程情况较多比较复杂，有兴趣的同学可以去看源码。</p>
+<pre><code class="java">void afterRead(Node&lt;K, V&gt; node, long now, boolean recordHit) {
   if (recordHit) {
     statsCounter().recordHits(1);
   }
@@ -222,6 +229,103 @@ switch (drainStatus()) {
     throw new IllegalStateException();
 }
 }</code></pre>
+<p><img src="https://i.loli.net/2020/01/18/kQbc8Tiu1LBoX9m.png" srcset="/img/loading.gif" alt="未命名表单 _3_.png"><br><img src="https://i.loli.net/2020/01/18/l29KMm3RznsywqX.png" srcset="/img/loading.gif" alt="185377099.png"></p>
+<h3 id="缓冲队列——写"><a href="#缓冲队列——写" class="headerlink" title="缓冲队列——写"></a>缓冲队列——写</h3><p>Caffeine认为写的操作远小于读，因此所有的写操作共享同一个缓冲队列，这里的队列一个多生产者单消费者模型，具体的实现是用了<a href="https://github.com/JCTools/JCTools/wiki/Which-Queue-Should-I-Use%3F" target="_blank" rel="noopener">JCtools</a>里的无锁MPSC(Multi Producer Single Consumer)自动扩容队列，由于没有锁因此效率很高。写操作的丢失是能被容许的，因此Caffeine中每次写操作都会触发一次缓存区调度任务。缓存区的任务回放(读和写都有)和缓存数据的写入会产生竞态条件，可能会导致对某个缓存数据的增删改查操作不能被有序的执行，从而产生<a href="https://stackoverflow.com/questions/5900165/what-is-the-difference-between-garbage-and-dangling-references" target="_blank" rel="noopener">悬空索引</a>的问题，Caffenie通过引入了状态机定义节点的生命周期来解决这个问题。Alive状态代表该节点还在缓存中，Retired状态代表节点不在缓存中但是正在被淘汰策略清除，Dead状态代表该节点已经被移出缓存区了。<br><img src="https://i.loli.net/2020/01/18/gG7wn8JVdBxYeHX.png" srcset="/img/loading.gif" alt="1.png"><br><img src="https://i.loli.net/2020/01/18/5MEfRmiLOArsZuP.png" srcset="/img/loading.gif" alt="2.png"></p>
+<h3 id="缓冲队列任务调度（Maintenance-Work）"><a href="#缓冲队列任务调度（Maintenance-Work）" class="headerlink" title="缓冲队列任务调度（Maintenance Work）"></a>缓冲队列任务调度（Maintenance Work）</h3><p>上面提到读写操作都会触发缓存区的任务调度，那这个任务调度到底是干了那些事情呢，上代码。可以看到Caffeine中的缓存区任务调度(scheduleDrainBuffers)实际上是异步执行了一个叫做执行清理的任务(PerformCleanupTask)，这里的线程池采用了ForkJoinPool实现。继续往下可以看到清理任务其实最终执行的是maintenance方法中的内容，执行之前会获取一个叫做evictionLock的锁，这里其实已经可以猜到这部分的主要工作肯定是和缓存淘汰有关，查看maintenance内容也验证了前面的猜想。至此可以总结出Caffeine中引用淘汰、容量限制淘汰、缓存过期淘汰是由缓存的读写操作经过一定规则计算后触发的，这也解释了上述遗留的缓存过期淘汰发生时间问题。</p>
+<pre><code class="java">void scheduleDrainBuffers() {
+  if (drainStatus() &gt;= PROCESSING_TO_IDLE) {
+    return;
+  }
+  if (evictionLock.tryLock()) {
+    try {
+      int drainStatus = drainStatus();
+      if (drainStatus &gt;= PROCESSING_TO_IDLE) {
+        return;
+      }
+      lazySetDrainStatus(PROCESSING_TO_IDLE);
+      executor().execute(drainBuffersTask);
+    } catch (Throwable t) {
+      logger.log(Level.WARNING, &quot;Exception thrown when submitting maintenance task&quot;, t);
+      maintenance();
+    } finally {
+      evictionLock.unlock();
+    }
+  }
+}
+final class PerformCleanupTask extends ForkJoinTask&lt;Void&gt; implements Runnable {
+  @Override
+  public void run() {
+    performCleanUp();
+  }
+}</code></pre>
+<pre><code class="java">void scheduleDrainBuffers() {
+  if (drainStatus() &gt;= PROCESSING_TO_IDLE) {
+    return;
+  }
+  if (evictionLock.tryLock()) {
+    try {
+      int drainStatus = drainStatus();
+      if (drainStatus &gt;= PROCESSING_TO_IDLE) {
+        return;
+      }
+      lazySetDrainStatus(PROCESSING_TO_IDLE);
+      executor().execute(drainBuffersTask);
+    } catch (Throwable t) {
+      logger.log(Level.WARNING, &quot;Exception thrown when submitting maintenance task&quot;, t);
+      maintenance();
+    } finally {
+      evictionLock.unlock();
+    }
+  }
+}
+final class PerformCleanupTask extends ForkJoinTask&lt;Void&gt; implements Runnable {
+  @Override
+  public void run() {
+    performCleanUp();
+  }
+}
+void performCleanUp(@Nullable Runnable task) {
+  evictionLock.lock();
+  try {
+    maintenance(task);
+  } finally {
+    evictionLock.unlock();
+  }
+}
+void maintenance(@Nullable Runnable task) {
+  lazySetDrainStatus(PROCESSING_TO_IDLE);
+  try {
+    drainReadBuffer();
+    drainWriteBuffer();
+    if (task != null) {
+      task.run();
+    }
+    drainKeyReferences();
+    drainValueReferences();
+    expireEntries();
+    evictEntries();
+  } finally {
+    if ((drainStatus() != PROCESSING_TO_IDLE) || !casDrainStatus(PROCESSING_TO_IDLE, IDLE)) {
+      lazySetDrainStatus(REQUIRED);
+    }
+  }
+}</code></pre>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>上述章节已经详细的介绍了Caffeine的一些核心能力及其实现原理，除此之外Caffeine还提供了异步刷新、弱引用key、弱软引用value、淘汰监听、打点监控等功能，由于篇幅关系这里也不再多做介绍。说了这么多，那到底Caffeine怎么用呢？是不是还要花时间去熟悉API？我想说这部分大家完全不必担心，因为Caffeine的API是完全参考Google Guava的，如果你有Guava的使用经验切换成本几乎为零，这里贴上一段Caffeine的Cache构建代码，大家可以发现是不是和Guava一模一样。</p>
+<pre><code class="java">public static void main(String[] args) {
+  Cache&lt;String, Object&gt; manualCache = Caffeine.newBuilder()
+      .expireAfterWrite(10, TimeUnit.MINUTES)
+      .expireAfterAccess(1000, TimeUnit.SECONDS)
+      .maximumSize(10000)
+      .build();
+
+  String key = &quot;learning&quot;;
+  manualCache.put(key, &quot;caffeine&quot;);
+  manualCache.get(key, e -&gt; getFromMysql(key));
+}
+private static String getFromMysql(String key) {
+  return &quot;hha&quot;;
+}</code></pre>
+<h2 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h2><p><a href="http://highscalability.com/blog/2016/1/25/design-of-a-modern-cache.html" target="_blank" rel="noopener">Design Of A Modern Cache（Part1）</a><br><a href="http://highscalability.com/blog/2019/2/25/design-of-a-modern-cachepart-deux.html" target="_blank" rel="noopener">Design Of A Modern Cache（Part2）</a><br><a href="http://dimacs.rutgers.edu/~graham/pubs/papers/cmsoft.pdf" target="_blank" rel="noopener">Approximating Data with the Count-Min Data Structure</a><br><a href="http://delivery.acm.org/10.1145/3150000/3149371/a35-einziger.pdf?ip=185.214.167.165&id=3149371&acc=AUTHOR%2DIZED&key=4D4702B0C3E38B35%2E4D4702B0C3E38B35%2E4D4702B0C3E38B35%2E7CF34BA1F19DEFD2&__acm__=1565271897_e54f950aa47c703b62b9e35d55ab2325" target="_blank" rel="noopener">TinyLFU: A Highly Efficient Cache Admission Policy</a><br><a href="https://github.com/ben-manes/caffeine" target="_blank" rel="noopener">https://github.com/ben-manes/caffeine</a><br><a href="https://juejin.im/post/5b8df63c6fb9a019e04ebaf4" target="_blank" rel="noopener">深入解密来自未来的缓存-Caffeine</a><br><a href="https://juejin.im/post/5b7593496fb9a009b62904fa" target="_blank" rel="noopener">你应该知道的缓存进化史</a><br><a href="https://en.wikipedia.org/wiki/Cache_replacement_policies" target="_blank" rel="noopener">Cache Replacement Policies</a><br><a href="https://www.confluent.io/blog/apache-kafka-purgatory-hierarchical-timing-wheels/" target="_blank" rel="noopener">Apache Kafka, Purgatory, and Hierarchical Timing Wheels</a></p>
 </li>
 </ul>
 
@@ -243,7 +347,7 @@ switch (drainStatus()) {
     <div class="d-none d-lg-block col-lg-2 toc-container">
       
   <div id="toc">
-    <p class="h4"><i class="far fa-list-alt"></i>&nbsp;TOC</p>
+    <p class="h4"><i class="far fa-list-alt"></i>&nbsp;ディレクトリ</p>
     <div id="tocbot"></div>
   </div>
 
@@ -275,7 +379,7 @@ switch (drainStatus()) {
   <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
     <div class="modal-content">
       <div class="modal-header text-center">
-        <h4 class="modal-title w-100 font-weight-bold">Search</h4>
+        <h4 class="modal-title w-100 font-weight-bold">検索</h4>
         <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -283,7 +387,7 @@ switch (drainStatus()) {
       <div class="modal-body mx-3">
         <div class="md-form mb-5">
           <input type="text" id="local-search-input" class="form-control validate">
-          <label data-error="x" data-success="v" for="local-search-input">keyword</label>
+          <label data-error="x" data-success="v" for="local-search-input">キーワード</label>
         </div>
         <div class="list-group" id="local-search-result"></div>
       </div>
