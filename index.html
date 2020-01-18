@@ -123,32 +123,51 @@
 
 
     
+
+    
         <div class="row mb-4 mx-auto">
             
             
+            <div class="col-12 col-md-4 m-auto">
+                <a href="/2020/01/18/Caffeine缓存详解/" target="_self">
+                <img src="http://i.loli.net/2020/01/18/XgNrswEJ53tyKFh.jpg" srcset="/img/loading.gif" alt="Caffeine缓存详解" class="img-fluid rounded z-depth-3 index-thumbnails">
+                </a>
+            </div>
+            
             <div class="col-12 col-md-8 m-auto">
-            <a href="/2020/02/04/一封告白信！/">
-                <p class="h4 index-header">一封告白信！</p>
+            <a href="/2020/01/18/Caffeine缓存详解/">
+                <p class="h4 index-header">Caffeine缓存详解</p>
                 
                 
                 
                 
                 <div class="index-excerpt">
-                <div class="index-text mb-1"></div>
+                <div class="index-text mb-1">前言Caffeine是一款基于Java8开发的，高性能的，接近最优的本地缓存库，出自于Benjamin Manes大神之手，大家熟悉的Spring4.3+和SpringBoot1.4+缓存的实现便是基于Caffeine。本文将从淘汰策略、过期策略、并发控制等方面为大家揭开Caffeine的神秘面纱,由于笔者自身水平有限，如果有不对或者任何建议欢迎批评和指正
+淘汰策略（Size-Based）&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp缓存命中率是衡量缓存系统优劣的重要指标，缓存通过保存最近使用或经常使用的数据于速度较快的介质中以提高数据的访问速度，缓存空间被填满后，会面临如何选择丢弃数据为新数据腾出空间的问题，因此选择合适的缓存淘汰算法会直接影响缓存的命中率。常用的缓存算法有：
+
+First in first out (FIFO) 顾名思义，就是一个FIFO队列，先进入缓存的先被淘汰，忽略数据访问频率和次数信息。较为原始，命中率很低。
+Least recently used (LRU) 最近最少被使用算法，其核心思想是【如果数据最近被访问过，那么将来被访问的概</div>
                 </div>
             </a>
 
             <div>
                 
-                <i class="iconfont icon-riqi2"></i>&nbsp;2020-02-04&nbsp;&nbsp;
+                <i class="iconfont icon-riqi2"></i>&nbsp;2020-01-18&nbsp;&nbsp;
                 
+                
+                
+                <i class="iconfont icon-tag"></i>
+                
+                    <a href="/tags/%E7%BC%93%E5%AD%98">缓存</a>&nbsp;
+                
+                    <a href="/tags/Caffeine">Caffeine</a>&nbsp;
+                
+                    <a href="/tags/Guava">Guava</a>&nbsp;
                 
                 
             </div>
             </div>
         </div>
-    
-
     
 
 
