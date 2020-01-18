@@ -106,7 +106,7 @@
                   
                   &nbsp;<i class="far fa-chart-bar"></i>
                   <span class="post-count">
-                    0 字
+                    286 字
                   </span>&nbsp;
                 
 
@@ -147,7 +147,13 @@
       <div class="py-5 z-depth-3" id="board">
         <div class="post-content mx-auto" id="post">
           <div class="markdown-body">
-            
+            <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>由于笔者自身水平有限，如果有不对或者任何建议欢迎批评和指正</p>
+<h1 id="Caffeine详解"><a href="#Caffeine详解" class="headerlink" title="Caffeine详解"></a>Caffeine详解</h1><p>Caffeine是一款基于Java8开发的，高性能的，接近最优的本地缓存库，出自于Benjamin Manes大神之手，大家熟悉的Spring4.3+和SpringBoot1.4+缓存的实现便是基于Caffeine。本文将从淘汰策略、过期策略、并发控制等方面为大家揭开Caffeine的神秘面纱。</p>
+<h2 id="淘汰策略（Size-Based）"><a href="#淘汰策略（Size-Based）" class="headerlink" title="淘汰策略（Size-Based）"></a>淘汰策略（Size-Based）</h2><p>缓存命中率是衡量缓存系统优劣的重要指标，缓存通过保存最近使用或经常使用的数据于速度较快的介质中以提高数据的访问速度，缓存空间被填满后，会面临如何选择丢弃数据为新数据腾出空间的问题，因此选择合适的缓存淘汰算法会直接影响缓存的命中率。常用的缓存算法有：</p>
+<ul>
+<li><em>First in first out (FIFO)</em> 顾名思义，就是一个FIFO队列，先进入缓存的先被淘汰，忽略数据访问频率和次数信息。较为原始，命中率很低。</li>
+</ul>
+
             <hr>
           </div>
           <br>
