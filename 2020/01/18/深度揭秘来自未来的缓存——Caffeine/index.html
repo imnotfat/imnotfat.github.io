@@ -120,7 +120,7 @@
                   
                   &nbsp;<i class="far fa-clock"></i>
                   <span class="post-count">
-                      18 分钟
+                      17 分钟
                   </span>&nbsp;
                 
 
@@ -153,9 +153,7 @@
       <div class="py-5 z-depth-3" id="board">
         <div class="post-content mx-auto" id="post">
           <div class="markdown-body">
-            <p>Caffeine是一款基于Java8开发的，高性能的，接近最优的本地缓存库，出自于Benjamin Manes大神之手，大家熟悉的Spring4.3+和SpringBoot1.4+缓存的实现便是基于Caffeine。本文将从淘汰策略、过期策略、并发控制等方面为大家揭开Caffeine的神秘面纱。</p>
-<a id="more"></a>
-<h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>Caffeine是一款基于Java8开发的，高性能的，接近最优的本地缓存库，出自于Benjamin Manes大神之手，大家熟悉的Spring4.3+和SpringBoot1.4+缓存的实现便是基于Caffeine。本文将从淘汰策略、过期策略、并发控制等方面为大家揭开Caffeine的神秘面纱,由于笔者自身水平有限，如果有不对或者任何建议欢迎批评和指正</p>
+            <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>Caffeine是一款基于Java8开发的，高性能的，接近最优的本地缓存库，出自于Benjamin Manes大神之手，大家熟悉的Spring4.3+和SpringBoot1.4+缓存的实现便是基于Caffeine。本文将从淘汰策略、过期策略、并发控制等方面为大家揭开Caffeine的神秘面纱,由于笔者自身水平有限，如果有不对或者任何建议欢迎批评和指正</p>
 <h1 id="淘汰策略（Size-Based）"><a href="#淘汰策略（Size-Based）" class="headerlink" title="淘汰策略（Size-Based）"></a>淘汰策略（Size-Based）</h1><p>&amp;nbsp&amp;nbsp&amp;nbsp&amp;nbsp缓存命中率是衡量缓存系统优劣的重要指标，缓存通过保存最近使用或经常使用的数据于速度较快的介质中以提高数据的访问速度，缓存空间被填满后，会面临如何选择丢弃数据为新数据腾出空间的问题，因此选择合适的缓存淘汰算法会直接影响缓存的命中率。常用的缓存算法有：</p>
 <ul>
 <li><em>First in first out (FIFO)</em> 顾名思义，就是一个FIFO队列，先进入缓存的先被淘汰，忽略数据访问频率和次数信息。较为原始，命中率很低。</li>
@@ -210,7 +208,7 @@ Caffeine的缓存淘汰是通过一种叫做W-TinyLFU的数据结构实现的，
   }
 }</code></pre>
 <p>对于全局清理而言主要有两个要解决的问题点，即如何选择清理时间和如何快速找到过期数据并移除。我们首先来看第一个问题，通常来讲有两种方式，一是依赖缓存的淘汰策略，缓存区达到容量限制后发生缓存淘汰时触发一次缓存过期清理，二是开启一个清理线程定期的执行过期清理工作。Caffeine中选择的第二种方式，不同的是这里的实现并不是通过一个轮询线程定期执行，而是由缓存的读写触发的，具体的触发方式和触发规则将在下一节【并发控制】里详细讲解。解决了如何选择清理时间的问题我们再来看如何能快速找到过期数据，通常的做法是维护一个基于过期时间的优先队列，这样做的复杂度是O(lgn)，Caffeine中采用的是Kafka中的时间轮<a href="http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf" target="_blank" rel="noopener">hierarchical timing wheels</a>方法，他的插入删除时间复杂度都为O(1)，相信做过定时任务调度的同学对这个数据结构一定不陌生，这里只做一点简单的介绍，想要深入了解的同学可以点击<a href="https://www.confluent.io/blog/apache-kafka-purgatory-hierarchical-timing-wheels/" target="_blank" rel="noopener">传送门</a>。</p>
-<h2 id="时间轮（Timing-Wheels）"><a href="#时间轮（Timing-Wheels）" class="headerlink" title="时间轮（Timing Wheels）"></a>时间轮（Timing Wheels）</h2><p><img src="https://i.loli.net/2020/01/18/9aLn6PFjhK8cB3q.png" srcset="/img/loading.gif" alt="185214690.png"><br>时间轮是一个由时间插槽组成的环状数组，插槽由一组同样时间范围内的定时任务组成。每一个插槽代表一个时间间隔(u)，时间轮由n个插槽组成，因此一个时间轮所能承载的调度时间是u*n。时间轮中时间指针(ticks)用于标记时间，每次转动一个插槽的间隔，ticks指向的插槽代表当前插槽内的所有任务过期，清空当前插槽，插入任务时，基于当前时间算出ticks所在的插槽，再根据任务的过期时间插入相应的插槽即可，可以看出时间轮对于任务的插入和删除(过期)操作时间复杂度都是O(1)。单个时间轮所能代表的时间是有限的，当一个任务的过期时间超过了时间轮所能表示的调度范围时，单个时间轮就无法胜任了，当然我们可以选择像HashMap一样做扩容，重新划分时间间隔或增加插槽数，显然成本太高，不能接受，因此引进了层级时间轮的概念，更通俗一点就是多来几个轮子，每个时间轮代表的一种时间间隔，如果上层时间轮的精度太粗不能满足要求，则交给下一级的时间轮处理，直至找到满足要求的时间间隔要求的时间轮，此时任务插入的时间成本变成了O(m)，其中m等于时间轮的个数，时间轮的个数不可能很大，这是可以接受的。插槽内定时任务的存储是用一个双向链表实现的，这样设计的好处是如果我们持有列表中一个节点的引用时可以以O(1)的时间复杂度对该节点做删除或插入操作。</p>
+<h3 id="时间轮（Timing-Wheels）"><a href="#时间轮（Timing-Wheels）" class="headerlink" title="时间轮（Timing Wheels）"></a>时间轮（Timing Wheels）</h3><p><img src="https://i.loli.net/2020/01/18/9aLn6PFjhK8cB3q.png" srcset="/img/loading.gif" alt="185214690.png"><br>时间轮是一个由时间插槽组成的环状数组，插槽由一组同样时间范围内的定时任务组成。每一个插槽代表一个时间间隔(u)，时间轮由n个插槽组成，因此一个时间轮所能承载的调度时间是u*n。时间轮中时间指针(ticks)用于标记时间，每次转动一个插槽的间隔，ticks指向的插槽代表当前插槽内的所有任务过期，清空当前插槽，插入任务时，基于当前时间算出ticks所在的插槽，再根据任务的过期时间插入相应的插槽即可，可以看出时间轮对于任务的插入和删除(过期)操作时间复杂度都是O(1)。单个时间轮所能代表的时间是有限的，当一个任务的过期时间超过了时间轮所能表示的调度范围时，单个时间轮就无法胜任了，当然我们可以选择像HashMap一样做扩容，重新划分时间间隔或增加插槽数，显然成本太高，不能接受，因此引进了层级时间轮的概念，更通俗一点就是多来几个轮子，每个时间轮代表的一种时间间隔，如果上层时间轮的精度太粗不能满足要求，则交给下一级的时间轮处理，直至找到满足要求的时间间隔要求的时间轮，此时任务插入的时间成本变成了O(m)，其中m等于时间轮的个数，时间轮的个数不可能很大，这是可以接受的。插槽内定时任务的存储是用一个双向链表实现的，这样设计的好处是如果我们持有列表中一个节点的引用时可以以O(1)的时间复杂度对该节点做删除或插入操作。</p>
 <h1 id="并发控制（Concurrency-Control）"><a href="#并发控制（Concurrency-Control）" class="headerlink" title="并发控制（Concurrency-Control）"></a>并发控制（Concurrency-Control）</h1><p>缓存的并发控制是一个比较头疼的问题，因为缓存的淘汰策略、过期策略等等都会涉及到了对同一块缓存区内容的修改，最简单省事的办法无非就是给缓存区加锁，分段锁是一种比较通用的解决方案，ConcurrentyHashMap的实现(Java8之前)就是基于分段锁，然而由于缓存中锁的竞争主要发生在一些热点数据上，因此分段锁带来的收益也是有限的。Caffeine中采用了缓冲队列回放机制来减轻并发带来的锁竞争问题，同时对于缓存而言读操作是远远大于写操作的，因此Caffeine中对于读写的缓冲队列也采用了不同的实现思路和方式，下面详细讨论。</p>
 <h2 id="缓冲队列——读"><a href="#缓冲队列——读" class="headerlink" title="缓冲队列——读"></a>缓冲队列——读</h2><p>Caffeine中缓存每次的读操作都会先被写入缓冲队列，其底层的数据结构是一个<a href="https://github.com/ben-manes/caffeine/issues/161" target="_blank" rel="noopener">striped ring buffer</a>，这里的striped是指一种通过哈希获取锁的算法，对于同一个key（Java中可能对象地址不同）哈希后获得的将是同一个锁对象，Caffeine基于striped hash后的key分配相应的ring buffer，值得注意的是这里的key并不是缓存数据的key，而是线程本身，这样设计的好处是可以对热点数据访问引起的激增流量起到削峰作用。写入缓存成功后会基于一定的条件判断是否需要触发一个异步的缓存区调度任务，代码如下。可以看到当ring buffer满了之后并且调度状态满足一定的条件才会触发，如果当前ring buffer满之后，后续写入该队列的读操作会被直接被丢弃，这种信息的缺失并不会产生很大的影响，因为TinyLFU可以记录哪些是热点数据，这里状态机之间的流转如图所示，具体的状态机转移过程情况较多比较复杂，有兴趣的同学可以去看源码。</p>
 <pre><code class="java">void afterRead(Node&lt;K, V&gt; node, long now, boolean recordHit) {
@@ -363,7 +361,7 @@ private static String getFromMysql(String key) {
     <div class="d-none d-lg-block col-lg-2 toc-container">
       
   <div id="toc">
-    <p class="h4"><i class="far fa-list-alt"></i>&nbsp;ディレクトリ</p>
+    <p class="h4"><i class="far fa-list-alt"></i>&nbsp;TOC</p>
     <div id="tocbot"></div>
   </div>
 
@@ -395,7 +393,7 @@ private static String getFromMysql(String key) {
   <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
     <div class="modal-content">
       <div class="modal-header text-center">
-        <h4 class="modal-title w-100 font-weight-bold">検索</h4>
+        <h4 class="modal-title w-100 font-weight-bold">Search</h4>
         <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -403,7 +401,7 @@ private static String getFromMysql(String key) {
       <div class="modal-body mx-3">
         <div class="md-form mb-5">
           <input type="text" id="local-search-input" class="form-control validate">
-          <label data-error="x" data-success="v" for="local-search-input">キーワード</label>
+          <label data-error="x" data-success="v" for="local-search-input">keyword</label>
         </div>
         <div class="list-group" id="local-search-result"></div>
       </div>
