@@ -106,7 +106,7 @@
                   
                   &nbsp;<i class="far fa-chart-bar"></i>
                   <span class="post-count">
-                    1.9k 字
+                    2k 字
                   </span>&nbsp;
                 
 
@@ -168,12 +168,13 @@ Caffeine的缓存淘汰是通过一种叫做W-TinyLFU的数据结构实现的，
 <li>主缓存区的大小(Probation的大小 + Protected的大小)达到了其容量限制会触发主缓存区的数据淘汰，Probation会被优先选择为淘汰队列，如果Probation为空，则选择Protected为淘汰队列。</li>
 <li>分别选取淘汰队列的首部元素作为受害者(victim)，尾部元素作为竞争者(candidate)，通过对比两者的访问频次选择最终的淘汰者，其中访问频次通过CountMin Sketch获得。<blockquote>
 <p>这里Caffeine对于竞争者的淘汰并不只是简单的判断其访问频次小于或等于受害者，而是加入了以下逻辑：</p>
-<blockquote>
-<p>如果竞争者的访问频次大于5且小于或等于受害者频次，随机淘汰，这么做的原因主要是为了一定程度的避免哈希碰撞引起的受害者访问频次非自然增长，从而导致新数据无法被写入主缓存区。<br>如果竞争者的访问频次小于等于5则直接淘汰竞争者，这是因为TinyLFU中记录数据的访问频次最大值为15，当超过这个最大值触发全局的reset后只有7，因此如果不加一个数据预热的过程，可能会导致一个频率较低的攻击者因为随机淘汰策略挤掉了热点数据。</p>
-</blockquote>
 </blockquote>
 </li>
 </ol>
+<ul>
+<li>如果竞争者的访问频次大于5且小于或等于受害者频次，随机淘汰，这么做的原因主要是为了一定程度的避免哈希碰撞引起的受害者访问频次非自然增长，从而导致新数据无法被写入主缓存区。</li>
+<li>如果竞争者的访问频次小于等于5则直接淘汰竞争者，这是因为TinyLFU中记录数据的访问频次最大值为15，当超过这个最大值触发全局的reset后只有7，因此如果不加一个数据预热的过程，可能会导致一个频率较低的攻击者因为随机淘汰策略挤掉了热点数据。<br>` boolean admit(K candidateKey, K victimKey) {<br>  int victimFreq = frequencySketch().frequency(victimKey);<br>  int candidateFreq = frequencySketch().frequency(candidateKey);<br>  if (candidateFreq &gt; victimFreq) {<pre><code>return true;</code></pre>  } else if (candidateFreq &lt;= 5) {<pre><code>return false;</code></pre>  }<br>  int random = ThreadLocalRandom.current().nextInt();<br>  return ((random &amp; 127) == 0);<br>} `</li>
+</ul>
 
             <hr>
           </div>
