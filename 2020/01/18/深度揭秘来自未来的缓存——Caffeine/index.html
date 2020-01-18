@@ -106,7 +106,7 @@
                   
                   &nbsp;<i class="far fa-chart-bar"></i>
                   <span class="post-count">
-                    699 字
+                    1.4k 字
                   </span>&nbsp;
                 
 
@@ -114,7 +114,7 @@
                   
                   &nbsp;<i class="far fa-clock"></i>
                   <span class="post-count">
-                      2 分钟
+                      4 分钟
                   </span>&nbsp;
                 
 
@@ -156,7 +156,10 @@
 <li><em>Least frequently used (LFU)</em> 最近最少频率使用，他的核心思想是【如果数据过去被多次访问，那么将来被访问的概率也更大】，LFU的实现需要为每个缓存数据维护一个引用计数，最后基于访问数量进行数据淘汰操作，因此实现较为复杂。LFU算法的效率通常高于LRU，能较好的介君突发流量或周期性访问问题，但是由于LFU需要一定时间累积自己的访问频率，因此无法应对数据访问方式的改变。</li>
 <li>更多的缓存淘汰算法有兴趣的同学可点击<a href="https://en.wikipedia.org/wiki/Cache_replacement_policies#Segmented_LRU_(SLRU)" target="_blank" rel="noopener">传送门</a>。
 Caffeine的缓存淘汰是通过一种叫做W-TinyLFU的数据结构实现的，这是一种对LRU和LFU进行了组合优化的算法，下图给出了W-TinyLFU相对其他几种算法的表现，可以看出W-TinyLFU在数据查询、搜索、分析等场景均有优异的表现，更详细的性能测试可以点击<a href="https://github.com/ben-manes/caffeine/wiki/Benchmarks" target="_blank" rel="noopener">传送门</a>。
-<img src="https://i.loli.net/2020/01/18/frEtxY4cLGkFsiA.png" srcset="/img/loading.gif" alt="image _1_.png"><img src="https://i.loli.net/2020/01/18/B8zVXarIJmvAfbZ.png" srcset="/img/loading.gif" alt="image _2_.png"></li>
+<img src="https://i.loli.net/2020/01/18/frEtxY4cLGkFsiA.png" srcset="/img/loading.gif" alt="image _1_.png"><img src="https://i.loli.net/2020/01/18/B8zVXarIJmvAfbZ.png" srcset="/img/loading.gif" alt="image _2_.png"><h3 id="W-TinyLFU"><a href="#W-TinyLFU" class="headerlink" title="W-TinyLFU"></a>W-TinyLFU</h3>Window TinyLFU主要由以下三个部分组成：<br><img src="https://i.loli.net/2020/01/18/45Y9iACz8OgJHZd.png" srcset="/img/loading.gif" alt="未命名表单.png"></li>
+<li><em>准入窗口（Admission Window</em> 也称伊甸区，是一个较小的LRU队列，其容量只有缓存大小的1%，这个窗口的作用主要是为了保护一些新进入缓存的数据，给他们一定的成长时间来积累自己的使用频率，避免被快速淘汰掉，同时这个窗口也可以过滤掉一些突发流量。</li>
+<li><em>频次过滤器（TinyLFU</em> 是Caffeine数据淘汰策略的核心所在，他依赖CountMin Sketch非精确的记录数据的历史访问次数，从而决定主缓存区数据的淘汰策略，这个数据结构用很小的成本完成了缓存数据访问频次的记录和查找。</li>
+<li><em>主缓存区（Main region</em> 用于存放大部分的缓存数据，数据结构为一个分段LRU队列（SLRU），包括ProtectedDeque和ProbationDeque两部分，其中ProtectedDeque的大小占总容量的80%，该部分使用TinyLFU的Adminsion策略进行数据的淘汰，一些访问频次很低的数据可以被快速淘汰掉，避免了主缓存区被新缓存污染。<h3 id="CountMin-Sketch"><a href="#CountMin-Sketch" class="headerlink" title="CountMin Sketch"></a>CountMin Sketch</h3>LFU算法实现的关键在于如何能高效的保存和读取数据最近的访问频次信息，通常的做法是使用popularity sketch(一种概率数据结构)来识别数据的”命中”事件，从而记录数据的访问次数。CountMin-Sketch便是其中的一种，他是通过一个计数矩阵和多个哈希算法实现的，如图所示：<br><img src="https://i.loli.net/2020/01/18/nMVBZcibk7jLrYy.png" srcset="/img/loading.gif" alt="未命名表单 _1_.png"><br>CountMin Sketch的原理类似于布隆过滤器，也是一种概率型的数据结构。其中不同的row对应着不同的哈希算法，depth大小代表着哈希算法的数量，width则表示数据可哈希的范围。当记录某个指定key的访问次数时，分别使用不同的哈希算法在其对应的row上做哈希操作，如果命中了某一个数据格，则将该数据格的引用计数+1。当查询某个指定key的访问次数时，经过哈希定位到具体的多个数据格后，返回最小的数量计为该数据的访问次数。使用多个哈希算法可以降低哈希碰撞带来的数据不准确的概率，宽度上的增加可以提高key的哈希范围，减少碰撞的概率，因此我们可以通过调整矩阵的width和depth达到算法在空间、效率和哈希碰撞产生的错误率之间平衡的目的。Caffeine中的CountMin Sketch是通过四种哈希算法和一个long型数组实现的，具体的实现方法可以参考咖啡拿铁大神的文章——深入解密来自未来的缓存-Caffeine，这里就不再赘述了。</li>
 </ul>
 
             <hr>
